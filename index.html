@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARPES kz Calculator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    /* ── Dark theme ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: #58a6ff;
+      margin-bottom: 0.4rem;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #8b949e;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .formula-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 0.8rem 1.2rem;
+      font-size: 0.88rem;
+      color: #a5d6ff;
+      font-family: monospace;
+      text-align: center;
+      margin-bottom: 2rem;
+      max-width: 680px;
+      width: 100%;
+      word-break: break-all;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 1.5rem;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    label {
+      font-size: 0.82rem;
+      color: #8b949e;
+    }
+
+    label span.unit {
+      color: #6e7681;
+      font-size: 0.78rem;
+    }
+
+    input[type="number"] {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 0.95rem;
+      padding: 0.45rem 0.65rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="number"]:focus {
+      border-color: #58a6ff;
+    }
+
+    /* Remove number spinners for cleaner look */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
+
+    .btn-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    button {
+      padding: 0.55rem 1.8rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+
+    #btn-plot {
+      background: #1f6feb;
+      color: #fff;
+    }
+    #btn-plot:hover { background: #388bfd; }
+
+    #btn-reset {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+    }
+    #btn-reset:hover { background: #30363d; }
+
+    .error-msg {
+      color: #f85149;
+      font-size: 0.85rem;
+      min-height: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    #plot {
+      width: 100%;
+      max-width: 900px;
+      height: 500px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>ARPES k<sub>z</sub> Calculator</h1>
+  <p class="subtitle">
+    Plots the out-of-plane crystal momentum k<sub>z</sub> as a function of photon energy E<sub>hv</sub>
+  </p>
+
+  <div class="formula-box">
+    k<sub>z</sub> = &radic;[ 0.5123&sup2; &middot; V<sub>0</sub> + (0.5123&radic;(E<sub>hv</sub>&minus;W) cos&theta; + E<sub>hv</sub> cos(&pi;/4 + &theta;) / 1973 )<sup>2</sup> ] / (&pi;/c)
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="ehv-min">E<sub>hv</sub> min <span class="unit">(eV)</span></label>
+      <input type="number" id="ehv-min" value="20" step="1" />
+    </div>
+    <div class="field">
+      <label for="ehv-max">E<sub>hv</sub> max <span class="unit">(eV)</span></label>
+      <input type="number" id="ehv-max" value="200" step="1" />
+    </div>
+    <div class="field">
+      <label for="c-val">Lattice constant <i>c</i> <span class="unit">(Å)</span></label>
+      <input type="number" id="c-val" value="5.0" step="0.1" />
+    </div>
+    <div class="field">
+      <label for="W-val">Work function <i>W</i> <span class="unit">(eV)</span></label>
+      <input type="number" id="W-val" value="4.5" step="0.1" />
+    </div>
+    <div class="field">
+      <label for="th-val">Tilt angle <i>&theta;</i> <span class="unit">(deg)</span></label>
+      <input type="number" id="th-val" value="0" step="1" />
+    </div>
+    <div class="field">
+      <label for="V0-val">Inner potential <i>V</i><sub>0</sub> <span class="unit">(eV)</span></label>
+      <input type="number" id="V0-val" value="14" step="0.5" />
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btn-plot">Plot</button>
+    <button id="btn-reset">Reset</button>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+
+  <div id="plot"></div>
+
+  <script>
+    // ── Default parameter values ──────────────────────────────────────────────
+    const DEFAULTS = {
+      "ehv-min": 20,
+      "ehv-max": 200,
+      "c-val":   5.0,
+      "W-val":   4.5,
+      "th-val":  0,
+      "V0-val":  14,
+    };
+
+    // ── kz formula ────────────────────────────────────────────────────────────
+    // kz = sqrt( 0.5123^2 * V0 + ( 0.5123*sqrt(Ehv-W)*cos(th_rad) + Ehv*cos(pi/4 + th_rad)/1973 )^2 ) / (pi/c)
+    // returns NaN if Ehv < W (photoelectron cannot escape)
+    function calcKz(Ehv, W, th_deg, V0, c) {
+      const th_rad = (th_deg / 180) * Math.PI;
+      const kinetic = Ehv - W;
+      if (kinetic < 0) return NaN;
+
+      const A = 0.5123;
+      const inner = A * Math.sqrt(kinetic) * Math.cos(th_rad)
+                  + Ehv * Math.cos(Math.PI / 4 + th_rad) / 1973;
+      const kz_abs = Math.sqrt(A * A * V0 + inner * inner);
+      return kz_abs / (Math.PI / c);
+    }
+
+    // ── Plot ──────────────────────────────────────────────────────────────────
+    function plotKz() {
+      const errorEl = document.getElementById("error-msg");
+      errorEl.textContent = "";
+
+      const ehvMin = parseFloat(document.getElementById("ehv-min").value);
+      const ehvMax = parseFloat(document.getElementById("ehv-max").value);
+      const c      = parseFloat(document.getElementById("c-val").value);
+      const W      = parseFloat(document.getElementById("W-val").value);
+      const th     = parseFloat(document.getElementById("th-val").value);
+      const V0     = parseFloat(document.getElementById("V0-val").value);
+
+      // ── Validation ──
+      if ([ehvMin, ehvMax, c, W, th, V0].some(isNaN)) {
+        errorEl.textContent = "All fields must be valid numbers.";
+        return;
+      }
+      if (ehvMin >= ehvMax) {
+        errorEl.textContent = "Ehv min must be less than Ehv max.";
+        return;
+      }
+      if (c <= 0) {
+        errorEl.textContent = "Lattice constant c must be positive.";
+        return;
+      }
+      if (V0 < 0) {
+        errorEl.textContent = "Inner potential V0 must be non-negative.";
+        return;
+      }
+
+      // ── Build data arrays (500 points) ──
+      const N = 500;
+      const xArr = [];
+      const yArr = [];
+      const step = (ehvMax - ehvMin) / (N - 1);
+
+      for (let i = 0; i < N; i++) {
+        const Ehv = ehvMin + i * step;
+        const kz  = calcKz(Ehv, W, th, V0, c);
+        xArr.push(Ehv);
+        yArr.push(kz);          // NaN values create gaps automatically
+      }
+
+      // ── Plotly trace ──
+      const trace = {
+        x: xArr,
+        y: yArr,
+        type: "scatter",
+        mode: "lines",
+        name: "k\u1D6B",
+        line: { color: "#58a6ff", width: 2 },
+        connectgaps: false,
+      };
+
+      // ── Plotly layout (dark) ──
+      const layout = {
+        paper_bgcolor: "#0d1117",
+        plot_bgcolor:  "#161b22",
+        font: { color: "#c9d1d9", family: "Segoe UI, system-ui, sans-serif" },
+        xaxis: {
+          title: { text: "Photon energy E\u1D34\u1D65 (eV)", font: { color: "#8b949e" } },
+          gridcolor:    "#21262d",
+          zerolinecolor:"#30363d",
+          tickcolor:    "#6e7681",
+          linecolor:    "#30363d",
+        },
+        yaxis: {
+          title: { text: "k\u1D6B / (\u03C0/c)", font: { color: "#8b949e" } },
+          gridcolor:    "#21262d",
+          zerolinecolor:"#30363d",
+          tickcolor:    "#6e7681",
+          linecolor:    "#30363d",
+        },
+        margin: { t: 30, r: 20, b: 55, l: 65 },
+        hovermode: "x unified",
+        hoverlabel: {
+          bgcolor: "#161b22",
+          bordercolor: "#30363d",
+          font: { color: "#c9d1d9" },
+        },
+      };
+
+      const config = {
+        responsive: true,
+        displayModeBar: true,
+        modeBarButtonsToRemove: ["select2d", "lasso2d"],
+        toImageButtonOptions: {
+          format: "png",
+          filename: "kz_vs_Ehv",
+          scale: 2,
+        },
+      };
+
+      Plotly.react("plot", [trace], layout, config);
+    }
+
+    // ── Reset ─────────────────────────────────────────────────────────────────
+    function resetFields() {
+      for (const [id, val] of Object.entries(DEFAULTS)) {
+        document.getElementById(id).value = val;
+      }
+      document.getElementById("error-msg").textContent = "";
+      Plotly.purge("plot");
+    }
+
+    // ── Event listeners ───────────────────────────────────────────────────────
+    document.getElementById("btn-plot").addEventListener("click", plotKz);
+    document.getElementById("btn-reset").addEventListener("click", resetFields);
+
+    // Plot on Enter key in any input
+    document.querySelectorAll("input[type='number']").forEach(input => {
+      input.addEventListener("keydown", e => { if (e.key === "Enter") plotKz(); });
+    });
+
+    // ── Auto-plot on first load ───────────────────────────────────────────────
+    plotKz();
+  </script>
+
+</body>
+</html>

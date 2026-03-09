@@ -137,6 +137,27 @@
       border-radius: 8px;
       overflow: hidden;
     }
+
+    .notes {
+      max-width: 900px;
+      width: 100%;
+      margin-top: 1.5rem;
+      padding: 0.9rem 1.2rem;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #8b949e;
+      line-height: 1.6;
+    }
+
+    .notes a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+    .notes a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -153,7 +174,7 @@
   <div class="controls">
     <div class="field">
       <label for="ehv-min">E<sub>hv</sub> min <span class="unit">(eV)</span></label>
-      <input type="number" id="ehv-min" value="20" step="1" />
+      <input type="number" id="ehv-min" value="70" step="1" />
     </div>
     <div class="field">
       <label for="ehv-max">E<sub>hv</sub> max <span class="unit">(eV)</span></label>
@@ -161,19 +182,19 @@
     </div>
     <div class="field">
       <label for="c-val">Lattice constant <i>c</i> <span class="unit">(Å)</span></label>
-      <input type="number" id="c-val" value="5.0" step="0.1" />
+      <input type="number" id="c-val" value="4.7" step="0.1" />
     </div>
     <div class="field">
       <label for="W-val">Work function <i>W</i> <span class="unit">(eV)</span></label>
-      <input type="number" id="W-val" value="4.5" step="0.1" />
+      <input type="number" id="W-val" value="4.45" step="0.1" />
     </div>
     <div class="field">
-      <label for="th-val">Tilt angle <i>&theta;</i> <span class="unit">(deg)</span></label>
+      <label for="th-val">Yaw angle <i>&theta;</i> <span class="unit">(deg)</span></label>
       <input type="number" id="th-val" value="0" step="1" />
     </div>
     <div class="field">
       <label for="V0-val">Inner potential <i>V</i><sub>0</sub> <span class="unit">(eV)</span></label>
-      <input type="number" id="V0-val" value="14" step="0.5" />
+      <input type="number" id="V0-val" value="12" step="0.5" />
     </div>
   </div>
 
@@ -186,15 +207,34 @@
 
   <div id="plot"></div>
 
+  <div class="notes">
+    <p>
+      This calculator plots the exact photon energy at which the photo-electron have out-of-plane crystal momentum either at
+      Brillouin zone center (Gamma) or at zone boundary (Z). The photon momentum has
+      been taken into account and therefore also valid for hard X-ray ARPES.
+    </p>
+    <p>
+      The equation used here is not limited to normal emission (electron emitting normal to sample surface) and made no approximation.
+      It is numerically equivalent to the commonly used form,
+      0.5123&radic;[<i>V</i><sub>0</sub> + (<i>E</i><sub>hv</sub>&minus;<i>W</i>)] + <i>E</i><sub>hv</sub>/1973 &middot; cos(45&deg;),
+      to within 1%.
+      The ARPES experimental geometry is assumed to be vertical cryostat and horizontal slit.
+      Note that for body centered lattices, <i>c</i> is the primitive cell lattice constant, that is half the conventional cell lattice constant.
+    </p>
+    <p>
+      Webpage maintained by <a href="mailto:sean.kung@ubc.ca">Sean Kung</a> at the University of British Columbia.
+    </p>
+  </div>
+
   <script>
     // ── Default parameter values ──────────────────────────────────────────────
     const DEFAULTS = {
-      "ehv-min": 20,
+      "ehv-min": 70,
       "ehv-max": 200,
-      "c-val":   5.0,
-      "W-val":   4.5,
+      "c-val":   4.7,
+      "W-val":   4.45,
       "th-val":  0,
-      "V0-val":  14,
+      "V0-val":  12,
     };
 
     // ── kz formula ────────────────────────────────────────────────────────────
@@ -210,6 +250,16 @@
                   + Ehv * Math.cos(Math.PI / 4 + th_rad) / 1973;
       const kz_abs = Math.sqrt(A * A * V0 + inner * inner);
       return kz_abs / (Math.PI / c);
+    }
+
+    // ── Binary search for Ehv where calcKz == targetKz (assumes monotonic) ───
+    function findEhvForKz(targetKz, W, th, V0, c, lo, hi) {
+      for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (calcKz(mid, W, th, V0, c) < targetKz) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
     }
 
     // ── Plot ──────────────────────────────────────────────────────────────────
@@ -255,15 +305,53 @@
         yArr.push(kz);          // NaN values create gaps automatically
       }
 
+      // ── Vertical lines at integer kz crossings ──
+      const validY = yArr.filter(v => !isNaN(v));
+      const kzLo = Math.min(...validY);
+      const kzHi = Math.max(...validY);
+      const shapes = [];
+      const xTickVals = [];
+      const xTickText = [];
+      const yTickVals = [];
+      const yTickText = [];
+      for (let n = Math.ceil(kzLo); n <= Math.floor(kzHi); n++) {
+        const ehv = findEhvForKz(n, W, th, V0, c, ehvMin, ehvMax);
+        shapes.push({
+          type: "line",
+          x0: ehv, x1: ehv,
+          y0: 0,   y1: 1,
+          xref: "x", yref: "paper",
+          line: { color: "#3a4150", width: 1 },
+        });
+        xTickVals.push(ehv);
+        xTickText.push(ehv.toFixed(1));
+        yTickVals.push(n);
+        yTickText.push(n % 2 === 0 ? "\u0393" : "Z");
+      }
+
       // ── Plotly trace ──
       const trace = {
         x: xArr,
         y: yArr,
         type: "scatter",
         mode: "lines",
-        name: "k\u1D6B",
-        line: { color: "#58a6ff", width: 2 },
+        // name: "k\u1D6B",
+        name: "kz",
+        line: { color: "#58a6ff", width: 3 },
         connectgaps: false,
+        showlegend: false,
+      };
+
+      // ── Dummy trace to activate yaxis2 (right axis) ──
+      const dummyTrace = {
+        x: [xArr[0], xArr[xArr.length - 1]],
+        y: [kzLo, kzHi],
+        type: "scatter",
+        mode: "markers",
+        marker: { opacity: 0, size: 0 },
+        yaxis: "y2",
+        showlegend: false,
+        hoverinfo: "skip",
       };
 
       // ── Plotly layout (dark) ──
@@ -271,21 +359,38 @@
         paper_bgcolor: "#0d1117",
         plot_bgcolor:  "#161b22",
         font: { color: "#c9d1d9", family: "Segoe UI, system-ui, sans-serif" },
+        shapes,
         xaxis: {
-          title: { text: "Photon energy E\u1D34\u1D65 (eV)", font: { color: "#8b949e" } },
-          gridcolor:    "#21262d",
+          title: { text: "Photon energy (eV)", font: { color: "#8b949e" } },
+          showgrid:     false,
           zerolinecolor:"#30363d",
           tickcolor:    "#6e7681",
           linecolor:    "#30363d",
+          tickvals:     xTickVals,
+          ticktext:     xTickText,
         },
         yaxis: {
-          title: { text: "k\u1D6B / (\u03C0/c)", font: { color: "#8b949e" } },
-          gridcolor:    "#21262d",
+          title: { text: "kz [\u03C0/c]", font: { color: "#8b949e" } },
+          gridcolor:    "#3a4150",
           zerolinecolor:"#30363d",
           tickcolor:    "#6e7681",
           linecolor:    "#30363d",
+          dtick:        1,
+          tick0:        0,
         },
-        margin: { t: 30, r: 20, b: 55, l: 65 },
+        yaxis2: {
+          overlaying:   "y",
+          side:         "right",
+          matches:      "y",
+          tickvals:     yTickVals,
+          ticktext:     yTickText,
+          tickcolor:    "#6e7681",
+          linecolor:    "#30363d",
+          showgrid:     false,
+          zeroline:     false,
+          tickfont:     { color: "#c9d1d9" },
+        },
+        margin: { t: 30, r: 45, b: 55, l: 65 },
         hovermode: "x unified",
         hoverlabel: {
           bgcolor: "#161b22",
@@ -305,7 +410,7 @@
         },
       };
 
-      Plotly.react("plot", [trace], layout, config);
+      Plotly.react("plot", [trace, dummyTrace], layout, config);
     }
 
     // ── Reset ─────────────────────────────────────────────────────────────────
